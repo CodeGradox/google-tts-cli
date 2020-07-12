@@ -1,0 +1,96 @@
+#!/usr/bin/ruby
+# encoding: UTF-8
+# frozen_string_literal: true
+
+require "optparse"
+require "google/cloud/text_to_speech"
+
+Options = Struct.new(:lang, :gender, :credentials, :input)
+
+#
+# Options parser.
+#
+class Parser
+  def self.parse(options)
+    args = Options.new("en-US", "NEUTRAL", nil, nil)
+
+    opt_parser = OptionParser.new do |opts|
+      opts.banner = "Usage: ruby synthesize [OPTION] FILE..."
+      opts.separator "Transforms text to audio with Google Text-to-Speech."
+      opts.separator "The audio output is written to STDOUT."
+      opts.separator "The Google TTS api gets the credentials by reading the GOOGLE_APPLICATION_CREDENTIALS env variable."
+      opts.separator "You can override this behavior by passing the -c/--credentials flag with the path to your credentials."
+      opts.separator ""
+      opts.separator "Options:"
+
+      opts.on("-lLANG", "--lang=LANG", "The language to use. Defaults to nb-NO.") do |lang|
+        args.lang = lang
+      end
+
+      opts.on("-gGENDER", "--gender=GENDER", "The gender og the voice, Defaults to NEUTRAL.") do |gender|
+        args.gender = gender.upcase
+      end
+
+      opts.on("-cCREDENTIALS", "--credentials=CREDENTIALS", "Path to credentials.") do |credentials|
+        args.credentials = credentials
+      end
+
+      opts.on("-h", "--help", "Prints this help.") do
+        puts opts
+        exit
+      end
+
+      opts.separator ""
+      opts.separator "Defaults to reading from STDIN if no files are given."
+      opts.separator "$ echo \"Read this text\" | ruby synthesize --lang en-US > output.mp3"
+    end
+
+    opt_parser.parse!(options)
+    return args
+  end
+end
+
+#
+# https://cloud.google.com/text-to-speech/docs/reference/libraries
+# Synthesizes text to speech using the Goolge Cloud solution.
+#
+class Synthesizer
+  attr_reader :response
+
+  def initialize(options)
+    # Customize the API.
+    Google::Cloud::TextToSpeech.configure do |config|
+      if options.credentials && File.exists?(options.credentials)
+        config.credentials = options.credentials
+      end
+    end
+
+    @client = Google::Cloud::TextToSpeech.text_to_speech
+
+    @voice = {
+      language_code: options.lang,
+      ssml_gender: options.gender
+    }
+
+    @text_input = { text: options.input }
+
+    @audio_config = { audio_encoding: "MP3" }
+  end
+
+  # Input is the text to be synthesized.
+  def synthesize
+    @response ||= @client.synthesize_speech(
+      input: @text_input,
+      voice: @voice,
+      audio_config: @audio_config
+    )
+    self
+  end
+end
+
+options = Parser.parse(ARGV)
+# Read from STDIN and files.
+options.input = ARGF.read
+synthesizer = Synthesizer.new(options).synthesize
+
+$stdout.write(synthesizer.response.audio_content)

@@ -1,0 +1,10 @@
+#!/usr/bin/fish
+
+switch (echo -e 'Norsk\nEnglish\nPolski' | rofi -dmenu -i -p 'Text to Speech Language')
+  case Norsk
+    wl-paste | ./synthesize --lang 'nb-NO' | mpv -
+  case English
+    wl-paste | ./synthesize --lang 'en-US' | mpv -
+  case Polski
+    wl-paste | ./synthesize --lang 'pl-PL' | mpv -
+end
